@@ -1,0 +1,62 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---- DSP test suite (no DPF needed) on the three systems ---------------------------------------------------
+  tests-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -f Makefile.tests -j2 check
+
+  tests-macos:
+    runs-on: macos-14            # Apple silicon: also exercises the ARM64 / NEON paths
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -f Makefile.tests -j3 check
+
+  tests-windows:
+    runs-on: windows-2022
+    continue-on-error: true      # first runs may need small portability fixes; do not block the plugin builds
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: make mingw-w64-x86_64-gcc
+      - run: make -f Makefile.tests -j2 check
+
+  # ---- the plugin itself: Linux, Windows (cross-compiled with MinGW) and macOS (universal) ------------------
+  plugin:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64,    runs-on: ubuntu-22.04 }
+          - { target: win64,           runs-on: ubuntu-22.04 }
+          - { target: macos-universal, runs-on: macos-14 }
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      # DPF is fetched here, so no `git submodule` command is needed on your side. If you prefer to pin it with a
+      # submodule (see docs/CI.md, path B), delete this step. To freeze the version, add `ref: <commit or tag>`.
+      - uses: actions/checkout@v4
+        with:
+          repository: DISTRHO/DPF
+          path: dpf
+          submodules: recursive
+      - uses: distrho/dpf-makefile-action@v1
+        with:
+          target: ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LowLatConv-${{ matrix.target }}
+          path: bin/
+          if-no-files-found: warn

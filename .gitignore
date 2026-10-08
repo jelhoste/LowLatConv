@@ -1,0 +1,4 @@
+build/
+bin/
+*.o
+llc_test_ir.wav

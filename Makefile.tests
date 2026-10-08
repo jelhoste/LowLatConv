@@ -1,0 +1,80 @@
+CXX      ?= g++
+CC       ?= gcc
+OPT      ?= -O2
+CXXFLAGS ?= -std=c++17 $(OPT) -Wall -Wextra -pthread
+PF        = third_party/pffft
+PFFLAGS   = -I$(PF)/include -I$(PF)/src
+PFOBJ     = build/pffft.o build/pffft_common.o build/fftpack.o
+HDRS      = aligned.hpp fft.hpp fft_backend.hpp convolver.hpp stereo_engine.hpp live_convolver.hpp denormals.hpp eq.hpp ir_processor.hpp wav_loader.hpp processor.hpp ir_display.hpp meters.hpp
+
+all: build/test_eq build/test_ir build/test_display build/test_meters build/test_wav build/test_stereo_pffft build/test_stereo_builtin build/test_processor build/test_convolver_pffft build/test_convolver_builtin build/test_live_pffft build/test_live_builtin build/bench_pffft build/bench_builtin
+
+DRW       = third_party/dr_wav
+build/dr_wav_impl.o: $(DRW)/dr_wav_impl.cpp $(DRW)/dr_wav.h
+	@mkdir -p build
+	$(CXX) -std=c++17 -O2 -w -c -I$(DRW) $< -o $@
+build/test_wav: test_wav.cpp wav_loader.hpp ir_processor.hpp build/dr_wav_impl.o
+	$(CXX) $(CXXFLAGS) -I$(DRW) -o $@ $< build/dr_wav_impl.o
+build/test_stereo_pffft: test_stereo.cpp $(HDRS) $(PFOBJ)
+	$(CXX) $(CXXFLAGS) -DLLC_USE_PFFFT $(PFFLAGS) -o $@ $< $(PFOBJ)
+build/test_stereo_builtin: test_stereo.cpp $(HDRS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $@ $<
+build/test_processor: test_processor.cpp $(HDRS) $(PFOBJ)
+	$(CXX) $(CXXFLAGS) -DLLC_USE_PFFFT $(PFFLAGS) -o $@ $< $(PFOBJ)
+
+build/test_display: test_display.cpp ir_display.hpp ir_processor.hpp stereo_engine.hpp convolver.hpp fft.hpp fft_backend.hpp aligned.hpp
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $@ $<
+build/test_meters: test_meters.cpp meters.hpp
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $@ $<
+
+build/test_eq: test_eq.cpp eq.hpp
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $@ $<
+build/test_ir: test_ir.cpp ir_processor.hpp convolver.hpp fft.hpp fft_backend.hpp aligned.hpp
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $@ $<
+
+build/%.o: $(PF)/src/%.c
+	@mkdir -p build
+	$(CC) $(OPT) -w -c $(PFFLAGS) $< -o $@
+
+build/test_convolver_pffft: test_convolver.cpp $(HDRS) $(PFOBJ)
+	$(CXX) $(CXXFLAGS) -DLLC_USE_PFFFT $(PFFLAGS) -o $@ $< $(PFOBJ)
+build/test_convolver_builtin: test_convolver.cpp $(HDRS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $@ $<
+build/test_live_pffft: test_live.cpp $(HDRS) $(PFOBJ)
+	$(CXX) $(CXXFLAGS) -DLLC_USE_PFFFT $(PFFLAGS) -o $@ $< $(PFOBJ)
+build/test_live_builtin: test_live.cpp $(HDRS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $@ $<
+build/bench_pffft: bench_convolver.cpp $(HDRS) $(PFOBJ)
+	$(CXX) $(CXXFLAGS) -DLLC_USE_PFFFT $(PFFLAGS) -o $@ $< $(PFOBJ)
+build/bench_builtin: bench_convolver.cpp $(HDRS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $@ $<
+
+check: all
+	./build/test_eq && ./build/test_ir && ./build/test_display && ./build/test_meters && ./build/test_wav && ./build/test_stereo_pffft && ./build/test_stereo_builtin && ./build/test_processor && ./build/test_convolver_pffft && ./build/test_convolver_builtin && ./build/test_live_pffft && ./build/test_live_builtin
+bench: all   # for meaningful numbers: make -f Makefile.tests OPT="-O3 -march=native" bench
+	./build/bench_builtin && ./build/bench_pffft
+
+sanitize:
+	@mkdir -p build
+	$(CC) -O1 -g -w -fsanitize=address,undefined -c $(PFFLAGS) $(PF)/src/pffft.c -o build/s_pffft.o
+	$(CC) -O1 -g -w -fsanitize=address,undefined -c $(PFFLAGS) $(PF)/src/pffft_common.c -o build/s_pffft_common.o
+	$(CC) -O1 -g -w -fsanitize=address,undefined -c $(PFFLAGS) $(PF)/src/fftpack.c -o build/s_fftpack.o
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -pthread -DLLC_USE_PFFFT $(PFFLAGS) -o build/s_conv test_convolver.cpp build/s_pffft.o build/s_pffft_common.o build/s_fftpack.o && ./build/s_conv
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -pthread -DLLC_USE_PFFFT $(PFFLAGS) -o build/s_live test_live.cpp build/s_pffft.o build/s_pffft_common.o build/s_fftpack.o && ./build/s_live
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -pthread -DLLC_USE_PFFFT $(PFFLAGS) -o build/s_stereo test_stereo.cpp build/s_pffft.o build/s_pffft_common.o build/s_fftpack.o && ./build/s_stereo
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -pthread -DLLC_USE_PFFFT $(PFFLAGS) -o build/s_proc test_processor.cpp build/s_pffft.o build/s_pffft_common.o build/s_fftpack.o && ./build/s_proc
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -I$(DRW) -o build/s_wav test_wav.cpp $(DRW)/dr_wav_impl.cpp && ./build/s_wav
+	$(CXX) -std=c++17 -O1 -g -fsanitize=thread -pthread -DLLC_USE_PFFFT -DLLC_TSAN_LITE $(PFFLAGS) -o build/s_proc_tsan test_processor.cpp $(PF)/src/pffft.c $(PF)/src/pffft_common.c $(PF)/src/fftpack.c 2>/dev/null && ./build/s_proc_tsan | tail -2
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -pthread -o build/s_eq test_eq.cpp && ./build/s_eq
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -pthread -o build/s_ir test_ir.cpp && ./build/s_ir
+	$(CXX) -std=c++17 -O1 -g -fsanitize=thread -pthread -DLLC_USE_PFFFT $(PFFLAGS) -o build/s_live_tsan test_live.cpp $(PF)/src/pffft.c $(PF)/src/pffft_common.c $(PF)/src/fftpack.c 2>/dev/null && ./build/s_live_tsan | tail -2
+clean:
+	rm -rf build
