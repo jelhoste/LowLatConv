@@ -14,6 +14,9 @@
 #include <cstring>
 
 #ifdef LLC_USE_PFFFT
+#ifndef PFFFT_STATIC_DEFINE
+#define PFFFT_STATIC_DEFINE            // PFFFT is linked statically (otherwise its header requests a DLL import on Windows)
+#endif
 extern "C" {
 #include "pffft.h"
 }
