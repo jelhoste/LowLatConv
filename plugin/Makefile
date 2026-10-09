@@ -19,11 +19,15 @@ FILES_DSP = \
 vpath %.cpp $(ROOT)/third_party/dr_wav
 vpath %.c   $(ROOT)/third_party/pffft/src
 
+# Garde-fou : message clair si ce fichier n'est pas dans plugin/ ou si DPF est absent de ../dpf
+ifeq ($(wildcard $(DPF_PATH)/Makefile.plugins.mk),)
+$(error DPF introuvable dans "$(DPF_PATH)". Ce Makefile doit rester dans le dossier plugin/ et DPF doit etre dans ../dpf)
+endif
+
 include $(DPF_PATH)/Makefile.plugins.mk
 
-BUILD_C_FLAGS   += -I$(ROOT)/third_party/pffft/include -I$(ROOT)/third_party/pffft/src -w
-BUILD_CXX_FLAGS += -std=c++17 -I$(ROOT) -I$(ROOT)/third_party/dr_wav -I$(ROOT)/third_party/pffft/include -I$(ROOT)/third_party/pffft/src -DLLC_USE_PFFFT
-LINK_FLAGS      += -pthread
+BUILD_C_FLAGS   += -I$(ROOT)/third_party/pffft/include -I$(ROOT)/third_party/pffft/src -DPFFFT_STATIC_DEFINE -w
+BUILD_CXX_FLAGS += -std=c++17 -I$(ROOT) -I$(ROOT)/third_party/dr_wav -I$(ROOT)/third_party/pffft/include -I$(ROOT)/third_party/pffft/src -DPFFFT_STATIC_DEFINE -DLLC_USE_PFFFT
 
 TARGETS += clap
 all: $(TARGETS)

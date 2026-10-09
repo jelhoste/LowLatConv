@@ -3,7 +3,7 @@ CC       ?= gcc
 OPT      ?= -O2
 CXXFLAGS ?= -std=c++17 $(OPT) -Wall -Wextra -pthread
 PF        = third_party/pffft
-PFFLAGS   = -I$(PF)/include -I$(PF)/src
+PFFLAGS   = -I$(PF)/include -I$(PF)/src -DPFFFT_STATIC_DEFINE   # static linking: without it PFFFT's header asks for a DLL import on Windows
 PFOBJ     = build/pffft.o build/pffft_common.o build/fftpack.o
 HDRS      = aligned.hpp fft.hpp fft_backend.hpp convolver.hpp stereo_engine.hpp live_convolver.hpp denormals.hpp eq.hpp ir_processor.hpp wav_loader.hpp processor.hpp ir_display.hpp meters.hpp
 

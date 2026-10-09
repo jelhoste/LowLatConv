@@ -10,6 +10,7 @@
 #include "extra/Thread.hpp"
 
 #include <atomic>
+#include <cstdlib>
 #include <string>
 
 START_NAMESPACE_DISTRHO
@@ -29,6 +30,11 @@ public:
         sr_.store(getSampleRate());
         proc_.prepare(getSampleRate());
         pushParams(true);
+        // Aide au test tant que l'interface n'existe pas : si la variable d'environnement LOWLATCONV_IR contient le chemin
+        // d'un WAV, il est chargé au démarrage (un état de projet restauré ensuite la remplace).
+        if (const char* envIR = std::getenv("LOWLATCONV_IR")) {
+            if (envIR[0] != '\0') { const MutexLocker lk(pathMutex_); irPath_ = envIR; irStamp_.fetch_add(1, std::memory_order_relaxed); }
+        }
         worker_.start();
     }
     ~LowLatConvPlugin() override
