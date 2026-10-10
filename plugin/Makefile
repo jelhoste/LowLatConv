@@ -29,5 +29,11 @@ include $(DPF_PATH)/Makefile.plugins.mk
 BUILD_C_FLAGS   += -I$(ROOT)/third_party/pffft/include -I$(ROOT)/third_party/pffft/src -DPFFFT_STATIC_DEFINE -w
 BUILD_CXX_FLAGS += -std=c++17 -I$(ROOT) -I$(ROOT)/third_party/dr_wav -I$(ROOT)/third_party/pffft/include -I$(ROOT)/third_party/pffft/src -DPFFFT_STATIC_DEFINE -DLLC_USE_PFFFT
 
+# DPF's Mutex / Thread use pthread (winpthreads) on Windows, but DPF only adds -lpthread to the CLAP link when a UI is
+# built (CLAP_LIBS). Without this line a DSP-only Windows build fails with 'undefined reference to pthread_mutex_lock'.
+ifeq ($(WINDOWS),true)
+EXTRA_DSP_LIBS += -lpthread
+endif
+
 TARGETS += clap
 all: $(TARGETS)

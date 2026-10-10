@@ -2,8 +2,9 @@
 // (never on the audio thread).
 #pragma once
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
-#include <new>
 #include <type_traits>
 
 namespace llc {
@@ -26,9 +27,16 @@ public:
     void resize(size_t n) {
         release();
         if (n == 0) return;
-        p_ = static_cast<T*>(::operator new(n * sizeof(T), std::align_val_t(64)));
+        // Manual 64-byte alignment: the C++17 aligned operator new does not exist before macOS 10.13 and the
+        // plugin targets older systems. The raw pointer is stored just before the aligned block.
+        const size_t bytes = n * sizeof(T);
+        void* raw = std::malloc(bytes + 64 + sizeof(void*));
+        if (!raw) std::abort();                                   // out of memory is fatal (as an uncaught bad_alloc was)
+        const std::uintptr_t addr = (reinterpret_cast<std::uintptr_t>(raw) + sizeof(void*) + 63u) & ~std::uintptr_t(63u);
+        reinterpret_cast<void**>(addr)[-1] = raw;
+        p_ = reinterpret_cast<T*>(addr);
         n_ = n;
-        std::memset(static_cast<void*>(p_), 0, n * sizeof(T));
+        std::memset(static_cast<void*>(p_), 0, bytes);
     }
     void zero() { if (p_) std::memset(static_cast<void*>(p_), 0, n_ * sizeof(T)); }
 
@@ -40,7 +48,7 @@ public:
 
 private:
     void release() {
-        if (p_) ::operator delete(static_cast<void*>(p_), std::align_val_t(64));
+        if (p_) std::free(reinterpret_cast<void**>(p_)[-1]);
         p_ = nullptr; n_ = 0;
     }
     T* p_ = nullptr;
